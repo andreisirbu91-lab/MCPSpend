@@ -7,10 +7,13 @@ import { Features } from '@/components/landing/Features'
 import { Pricing } from '@/components/landing/Pricing'
 import { Faq } from '@/components/landing/Faq'
 import { CTA } from '@/components/landing/CTA'
+import { SchemaJsonLd } from '@/components/SchemaJsonLd'
+import { TopicLinks } from '@/components/landing/TopicLinks'
 
 export default function Home() {
   return (
     <>
+      <SchemaJsonLd />
       <Nav />
       <main>
         <Hero />
@@ -18,6 +21,7 @@ export default function Home() {
         <HowItWorks />
         <Features />
         <Pricing />
+        <TopicLinks />
         <Faq />
         <CTA />
       </main>

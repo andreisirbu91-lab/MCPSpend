@@ -16,6 +16,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${base}/`,                   lastModified: now, changeFrequency: 'weekly',  priority: 1.0 },
     { url: `${base}/pricing`,            lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
     { url: `${base}/calculator`,         lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    // High-intent SEO landing pages targeting GSC queries we already rank for
+    // (positions 30-80) — these push toward page 1-2 by giving each query its
+    // own dedicated, deep page instead of all traffic landing on /.
+    { url: `${base}/mcp-cost`,                   lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${base}/cursor-mcp-cost`,            lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${base}/claude-desktop-mcp-cost`,    lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${base}/chatgpt-mcp-cost`,           lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${base}/mcp-pricing-comparison`,     lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${base}/ai-expense-tracker`,         lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${base}/enterprise`,                 lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${base}/use-cases/mcp-budgeting`,    lastModified: now, changeFrequency: 'monthly', priority: 0.8 },
+    { url: `${base}/use-cases/mcp-procurement`,  lastModified: now, changeFrequency: 'monthly', priority: 0.8 },
     { url: `${base}/security`,           lastModified: now, changeFrequency: 'monthly', priority: 0.8 },
     { url: `${base}/compare`,            lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${base}/compare/helicone`,   lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
