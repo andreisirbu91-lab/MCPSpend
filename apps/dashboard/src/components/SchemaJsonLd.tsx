@@ -21,9 +21,11 @@ const schemas = [
     founders: [{ '@type': 'Person', name: 'Andrei Sirbu' }],
     address: {
       '@type': 'PostalAddress',
-      addressCountry: 'RO',
+      streetAddress: 'Str. Gliei nr. 34-38, corp B',
       addressLocality: 'Bragadiru',
       addressRegion: 'Ilfov',
+      postalCode: '077025',
+      addressCountry: 'RO',
     },
     contactPoint: {
       '@type': 'ContactPoint',
