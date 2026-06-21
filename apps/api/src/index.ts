@@ -109,6 +109,11 @@ app.use('/api/audit', authMiddleware, auditRouter)      // org-scoped audit log 
 app.use('/api/account', authMiddleware, accountRouter)  // GDPR Art. 15/17/20 — export + delete (all plans)
 app.use('/api/webhook-subscriptions', authMiddleware, webhookSubscriptionsRouter)  // customer-defined webhooks for events
 app.use('/api/public/status', publicStatusRouter)        // public uptime data (no auth) for /status page
+// Also expose at /api/public so /api/public/pricing-models works — the price
+// table route is in the same router file and several landing pages link to
+// the short URL. Both paths resolve the same handlers (status returns the
+// '/' route, pricing returns the '/pricing-models' route).
+app.use('/api/public', publicStatusRouter)               // canonical /api/public/pricing-models for landing pages
 app.use('/api/stats/live', authMiddleware, liveRouter)   // SSE — live tool call stream for dashboard ticker
 app.use('/api/slack', slackRouter)                       // Slack slash commands — auth via ?key= in URL
 app.use('/api/internal', internalRouter)                // CI/CD: redeploy via DEPLOY_SECRET header (no JWT)
