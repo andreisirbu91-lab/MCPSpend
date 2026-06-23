@@ -65,7 +65,7 @@
     "@types/node": "^22.10.10",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.2.1",
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.28.1",
     "ovsx": "^0.10.1",
     "typescript": "^5.7.3"
   }
