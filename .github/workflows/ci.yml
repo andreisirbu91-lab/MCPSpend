@@ -41,6 +41,11 @@ jobs:
       - name: Run proxy unit tests
         run: pnpm --filter @mcpspend/proxy run test
 
+      # The Stripe account is shared with three other products; this suite is
+      # what keeps their subscriptions from being treated as ours.
+      - name: Run API unit tests
+        run: pnpm --filter @mcpspend/api run test
+
   build-api:
     name: Build API
     runs-on: ubuntu-latest

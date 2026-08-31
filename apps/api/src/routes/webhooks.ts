@@ -4,28 +4,21 @@ import jwt from 'jsonwebtoken'
 import { prisma } from '../lib/prisma'
 import { sendEmail } from '../lib/email'
 import { slugify, randomSlugSuffix } from '../lib/slug'
+import { decideOwnership, priceMap, type PlanInfo } from '../lib/stripeOwnership'
 
 const router = Router()
 
-// Map every Stripe Price (monthly OR yearly) to plan + monthly call limit.
-// The same plan share the same limit regardless of cadence.
-const PLAN_LIMITS: Record<string, { limit: number; plan: 'PRO' | 'TEAM' | 'ENTERPRISE' }> = {
-  [process.env.STRIPE_PRICE_PRO         || 'price_pro']:           { limit: 1_000_000,   plan: 'PRO' },
-  [process.env.STRIPE_PRICE_PRO_YEARLY  || 'price_pro_yearly']:    { limit: 1_000_000,   plan: 'PRO' },
-  [process.env.STRIPE_PRICE_TEAM        || 'price_team']:          { limit: 10_000_000,  plan: 'TEAM' },
-  [process.env.STRIPE_PRICE_TEAM_YEARLY || 'price_team_yearly']:   { limit: 10_000_000,  plan: 'TEAM' },
-  [process.env.STRIPE_PRICE_ENT         || 'price_enterprise']:    { limit: 999_999_999, plan: 'ENTERPRISE' },
-  [process.env.STRIPE_PRICE_ENT_YEARLY  || 'price_ent_yearly']:    { limit: 999_999_999, plan: 'ENTERPRISE' },
-}
+// Price -> plan + monthly call limit. Lives in ../lib/stripeOwnership, which is
+// also the barrier deciding whether an event belongs to MCPSpend at all: the
+// Stripe account is shared with FlowDeskOne, Worklio and Reper, and every
+// endpoint receives every event on the account.
+const PLAN_LIMITS: Record<string, PlanInfo> = priceMap()
 
 // Free-tier monthly call limit (also referenced in schema default). Lowered
 // from 50k to 25k 2026-05-23 — at 50k a heavy Cursor/Claude Code user could
 // stay on free forever; 25k is enough to see value but not enough to live on.
 const FREE_TIER_LIMIT = 25_000
 
-function isMcpSpendEvent(obj: { metadata?: Record<string, string> }): boolean {
-  return !obj.metadata?.project || obj.metadata.project === 'mcpspend'
-}
 
 async function uniqueOrgSlug(name: string): Promise<string> {
   const base = slugify(name)
@@ -162,12 +155,44 @@ async function handleSignupCheckout(session: Stripe.Checkout.Session) {
   })()
 }
 
+/**
+ * Is this subscription ours? Price first; if the price is unknown we still
+ * accept it when the subscription is already recorded against one of our
+ * organizations — that is a new MCPSpend price we have not added to the map
+ * yet, and we say so loudly rather than ignoring a paying customer.
+ */
+async function ownsSubscription(sub: Stripe.Subscription): Promise<PlanInfo | null | 'foreign'> {
+  const owned = decideOwnership(sub)
+  if (owned.kind === 'ours') return owned.plan
+
+  const known = await prisma.organization.findFirst({
+    where: { stripeSubscriptionId: sub.id },
+    select: { id: true },
+  })
+  if (known) {
+    console.error(
+      `[webhook] ALERT: subscription ${sub.id} belongs to org ${known.id} but its ` +
+      `price ${JSON.stringify(owned.prices)} is not in the price map. ` +
+      `Add it to lib/stripeOwnership.ts.`,
+    )
+    return null
+  }
+  return 'foreign'
+}
+
 // Stripe subscription statuses that mean "no active paid access":
 // - past_due / unpaid: latest invoice failed, payment retries exhausted
 // - canceled / incomplete_expired: explicitly canceled or initial payment never completed
 const INACTIVE_STATUSES = new Set(['past_due', 'unpaid', 'canceled', 'incomplete_expired'])
 
-async function handleSubscriptionChange(sub: Stripe.Subscription) {
+async function handleSubscriptionChange(sub: Stripe.Subscription): Promise<string> {
+  // The barrier runs FIRST. It used to sit below the downgrade branch, which
+  // matched on `stripeCustomerId` alone — so a FlowDeskOne subscription going
+  // past_due downgraded the MCPSpend organization of anyone who happened to be
+  // the same Stripe Customer on both products.
+  const plan = await ownsSubscription(sub)
+  if (plan === 'foreign') return 'foreign product'
+
   // Failed-payment grace ended OR sub canceled → downgrade to FREE so the
   // quota check in /v1/ingest starts blocking. We do NOT clear stripeCustomerId
   // (so they can resume on the same Stripe customer record).
@@ -180,12 +205,13 @@ async function handleSubscriptionChange(sub: Stripe.Subscription) {
         stripeSubscriptionId: null,
       },
     })
-    return
+    return `downgraded to FREE (${sub.status})`
   }
 
-  const priceId = sub.items.data[0]?.price.id
-  const planInfo = PLAN_LIMITS[priceId]
-  if (!planInfo) return
+  // `plan` is null only on the alarm path above: ours, but the price is not in
+  // the map yet, so we cannot tell which tier to grant. Leave the plan alone.
+  const planInfo = plan
+  if (!planInfo) return 'ours, unknown price — plan left unchanged'
 
   // Capture the previous plan + sub state so we can decide whether to send the
   // "subscription started" email (first transition into a paid plan or upgrade
@@ -231,6 +257,8 @@ async function handleSubscriptionChange(sub: Stripe.Subscription) {
       }
     })()
   }
+
+  return `plan ${planInfo.plan} (limit ${planInfo.limit})`
 }
 
 router.post('/stripe', async (req, res) => {
@@ -245,42 +273,63 @@ router.post('/stripe', async (req, res) => {
     return
   }
 
-  // Filter to MCPSpend events only — shared Stripe account with other projects.
-  const obj = event.data.object as { metadata?: Record<string, string> }
-  if (!isMcpSpendEvent(obj)) {
-    res.json({ received: true, ignored: 'foreign project' })
-    return
-  }
-
+  // The Stripe account is shared with FlowDeskOne, Worklio and Reper, and every
+  // endpoint receives every event on the account. Ownership is decided per
+  // branch, on the PRICE — never on metadata, which all four products write.
   try {
+    let result: string
+
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
-        if (session.metadata?.flow === 'signup') {
-          await handleSignupCheckout(session)
+        if (session.metadata?.flow !== 'signup') {
+          // Existing-user upgrade — subscription.created handles it.
+          result = 'not a signup checkout'
+          break
         }
-        // Otherwise: existing-user upgrade — subscription.created will handle it.
+        // A checkout session carries no prices, so it cannot be judged on its
+        // own: we fetch the subscription and run it through the same barrier.
+        // Without this a FlowDeskOne signup would create an MCPSpend account
+        // and email its new owner a "Welcome to MCPSpend" link.
+        const subscriptionId = typeof session.subscription === 'string'
+          ? session.subscription
+          : session.subscription?.id
+        if (!subscriptionId) { result = 'signup session without a subscription'; break }
+        const sub = await stripe.subscriptions.retrieve(subscriptionId)
+        if (await ownsSubscription(sub) === 'foreign') { result = 'foreign product'; break }
+        await handleSignupCheckout(session)
+        result = 'signup processed'
         break
       }
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
-        await handleSubscriptionChange(event.data.object as Stripe.Subscription)
+        result = await handleSubscriptionChange(event.data.object as Stripe.Subscription)
         break
       case 'customer.subscription.deleted': {
         const sub = event.data.object as Stripe.Subscription
+        // This branch had no price check at all, and matched on
+        // `stripeCustomerId` — so a cancellation on another product downgraded
+        // the MCPSpend organization of a customer subscribed to both.
+        if (await ownsSubscription(sub) === 'foreign') { result = 'foreign product'; break }
         await prisma.organization.updateMany({
           where: { stripeCustomerId: sub.customer as string },
           data: { plan: 'FREE', callsLimit: FREE_TIER_LIMIT, stripeSubscriptionId: null },
         })
+        result = 'downgraded to FREE (canceled)'
         break
       }
+      default:
+        result = 'unhandled event type'
     }
+
+    console.log(`[webhook] ${event.type}: ${result}`)
+    res.json({ received: true, result })
   } catch (err) {
     console.error(`[webhook] failed to process ${event.type}:`, err)
-    // Return 200 anyway so Stripe doesn't retry — we'll inspect logs.
+    // 200 even on failure: a 5xx makes Stripe retry for days and then disable
+    // the endpoint — which is exactly what happened to Worklio on 2026-08-30.
+    res.json({ received: true, error: String(err) })
   }
-
-  res.json({ received: true })
 })
 
 export { router as webhookRouter }

@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
-    "db:push": "prisma db push"
+    "db:push": "prisma db push",
+    "test": "node --test --import tsx src/lib/stripeOwnership.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.3.0",
