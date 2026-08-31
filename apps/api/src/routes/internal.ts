@@ -49,8 +49,13 @@ router.post('/redeploy', async (req, res) => {
 
   try {
     const url = `${COOLIFY_INTERNAL}/api/v1/deploy?uuid=${encodeURIComponent(parsed.data.uuid)}&force=${parsed.data.force}`
+    // POST, not GET: Coolify changed this endpoint and now answers a GET with
+    // `405 This endpoint has changed to a POST request.` The switch went
+    // unnoticed because the token we were sending had been revoked, so every
+    // call died at `401` — before routing ever ran. Two faults, the first
+    // hiding the second.
     const r = await fetch(url, {
-      method: 'GET',
+      method: 'POST',
       headers: { Authorization: `Bearer ${coolifyToken}` },
     })
     const body = await r.text()

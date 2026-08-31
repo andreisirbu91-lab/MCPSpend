@@ -16,7 +16,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import matter from 'gray-matter'
+import { parseFrontmatter } from './frontmatter'
 import { marked } from 'marked'
 
 const BLOG_DIR = path.join(process.cwd(), 'content', 'blog')
@@ -61,8 +61,7 @@ function estimateReadingMinutes(markdown: string): number {
 function readPostFile(filename: string): Post {
   const slug = filename.replace(/\.md$/, '')
   const raw = fs.readFileSync(path.join(BLOG_DIR, filename), 'utf8')
-  const { data, content } = matter(raw)
-  const frontmatter = data as PostFrontmatter
+  const { data: frontmatter, content } = parseFrontmatter<PostFrontmatter>(raw)
   if (!frontmatter.readingMinutes) {
     frontmatter.readingMinutes = estimateReadingMinutes(content)
   }

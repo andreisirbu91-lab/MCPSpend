@@ -46,6 +46,13 @@ jobs:
       - name: Run API unit tests
         run: pnpm --filter @mcpspend/api run test
 
+      # The blog loader is what broke every production build from 2026-07-14:
+      # a pnpm override forced js-yaml 4 into gray-matter, which calls the
+      # removed `yaml.safeLoad`. Nothing tested it, so the only thing that ever
+      # ran it was the production build itself.
+      - name: Run dashboard unit tests
+        run: pnpm --filter @mcpspend/dashboard run test
+
   build-api:
     name: Build API
     runs-on: ubuntu-latest
