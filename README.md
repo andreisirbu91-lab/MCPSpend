@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/andreisirbu91-lab-mcpspend-badge.png)](https://mseep.ai/app/andreisirbu91-lab-mcpspend)
+
 # MCPSpend
 
 > **Know what your AI agents really cost.** Real-time cost tracking for every MCP tool call across Cursor, Claude Desktop, Windsurf, and VS Code.
