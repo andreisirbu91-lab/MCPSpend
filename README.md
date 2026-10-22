@@ -2,7 +2,7 @@
 
 > **Know what your AI agents really cost.** Real-time cost tracking for every MCP tool call across Cursor, Claude Desktop, Windsurf, and VS Code.
 
-[![smithery badge](https://smithery.ai/badge/andreisirbu91-lab/mcpspend)](https://smithery.ai/servers/andreisirbu91-lab/mcpspend)
+[![LightNow capabilities](https://lightnow.ai/badge/io.github.andreisirbu91-lab/mcpspend)](https://lightnow.ai/servers/io.github.andreisirbu91-lab/mcpspend)
 [![npm version](https://img.shields.io/npm/v/@mcpspend/proxy.svg)](https://www.npmjs.com/package/@mcpspend/proxy)
 [![Open VSX](https://img.shields.io/open-vsx/v/McpSpend/mcpspend-vscode)](https://open-vsx.org/extension/McpSpend/mcpspend-vscode)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
